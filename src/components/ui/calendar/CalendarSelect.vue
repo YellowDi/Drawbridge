@@ -1,0 +1,177 @@
+<script setup lang="ts">
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
+
+import { cn } from "@/lib/utils"
+
+type CalendarSelectOption = {
+  value: number
+  label: string
+}
+
+const props = withDefaults(defineProps<{
+  modelValue: number
+  options: CalendarSelectOption[]
+  triggerLabel: string
+  class?: string
+  contentClass?: string
+}>(), {
+  class: "",
+  contentClass: "",
+})
+
+const emit = defineEmits<{
+  "update:modelValue": [value: number]
+}>()
+
+const rootRef = ref<HTMLElement>()
+const contentRef = ref<HTMLElement>()
+const open = ref(false)
+const contentSide = ref<"bottom" | "top">("bottom")
+const contentMaxHeight = ref(256)
+
+const contentClasses = computed(() => {
+  return cn(
+    "absolute left-0 z-50 min-w-full overflow-y-auto overscroll-contain rounded-md bg-popover p-1 text-popover-foreground shadow-[var(--shadow-card)]",
+    contentSide.value === "top" ? "bottom-[calc(100%+6px)]" : "top-[calc(100%+6px)]",
+    props.contentClass,
+  )
+})
+
+function toggleOpen() {
+  open.value = !open.value
+}
+
+function close() {
+  open.value = false
+}
+
+function selectValue(value: number) {
+  emit("update:modelValue", value)
+  close()
+}
+
+function updateContentGeometry() {
+  const rootEl = rootRef.value
+
+  if (!rootEl) {
+    return
+  }
+
+  const rect = rootEl.getBoundingClientRect()
+  const viewportPadding = 12
+  const gap = 6
+  const preferredMaxHeight = 256
+  const minimumUsableHeight = 120
+  const availableBelow = window.innerHeight - rect.bottom - viewportPadding - gap
+  const availableAbove = rect.top - viewportPadding - gap
+  const shouldOpenUp = availableBelow < minimumUsableHeight && availableAbove > availableBelow
+  const availableHeight = shouldOpenUp ? availableAbove : availableBelow
+
+  contentSide.value = shouldOpenUp ? "top" : "bottom"
+  contentMaxHeight.value = Math.max(Math.min(availableHeight, preferredMaxHeight), 0)
+}
+
+function scrollSelectedOptionIntoView() {
+  const contentEl = contentRef.value
+
+  if (!contentEl) {
+    return
+  }
+
+  const selectedEl = contentEl.querySelector<HTMLElement>("[data-selected='true']")
+
+  if (!selectedEl) {
+    return
+  }
+
+  const targetScrollTop = selectedEl.offsetTop - (contentEl.clientHeight - selectedEl.offsetHeight) / 2
+  const maxScrollTop = Math.max(contentEl.scrollHeight - contentEl.clientHeight, 0)
+
+  contentEl.scrollTop = Math.min(Math.max(targetScrollTop, 0), maxScrollTop)
+}
+
+function handleDocumentPointerDown(event: PointerEvent) {
+  if (!open.value) {
+    return
+  }
+
+  const target = event.target
+  if (target instanceof Node && rootRef.value?.contains(target)) {
+    return
+  }
+
+  close()
+}
+
+onMounted(() => {
+  document.addEventListener("pointerdown", handleDocumentPointerDown)
+  window.addEventListener("resize", updateContentGeometry)
+  window.addEventListener("scroll", updateContentGeometry, true)
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener("pointerdown", handleDocumentPointerDown)
+  window.removeEventListener("resize", updateContentGeometry)
+  window.removeEventListener("scroll", updateContentGeometry, true)
+})
+
+watch(open, async (isOpen) => {
+  if (!isOpen) {
+    return
+  }
+
+  await nextTick()
+  updateContentGeometry()
+  await nextTick()
+  scrollSelectedOptionIntoView()
+})
+</script>
+
+<template>
+  <div ref="rootRef" class="relative" data-list-popover @click.stop @pointerdown.stop>
+    <button
+      type="button"
+      :aria-label="triggerLabel"
+      :aria-expanded="open"
+      :class="
+        cn(
+          'border-input dark:bg-input/30 inline-flex h-8 items-center gap-1 rounded-md border bg-transparent px-2 pr-7 text-sm text-foreground shadow-xs outline-none transition-[color,box-shadow] hover:bg-accent hover:text-accent-foreground focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]',
+          props.class,
+        )
+      "
+      @click="toggleOpen"
+    >
+      <span class="whitespace-nowrap">{{ options.find(option => option.value === modelValue)?.label }}</span>
+      <i class="ri-arrow-down-s-line pointer-events-none absolute right-2 shrink-0 text-base leading-none opacity-50" />
+    </button>
+
+    <div
+      v-if="open"
+      ref="contentRef"
+      :class="contentClasses"
+      :style="{ maxHeight: `${contentMaxHeight}px` }"
+      data-list-popover
+      @click.stop
+      @pointerdown.stop
+    >
+      <button
+        v-for="option in options"
+        :key="option.value"
+        type="button"
+        :class="
+          cn(
+            'relative flex w-full items-center rounded-sm py-1.5 pl-2 pr-8 text-left text-sm transition',
+            modelValue === option.value ? 'bg-accent text-accent-foreground' : 'hover:bg-accent hover:text-accent-foreground',
+          )
+        "
+        :data-selected="modelValue === option.value"
+        @click="selectValue(option.value)"
+      >
+        <span class="whitespace-nowrap">{{ option.label }}</span>
+        <span class="absolute right-2 flex size-3.5 items-center justify-center">
+          <i v-if="modelValue === option.value" class="ri-check-line text-base leading-none" />
+        </span>
+      </button>
+    </div>
+  </div>
+</template>

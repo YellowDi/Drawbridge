@@ -1,0 +1,211 @@
+<script setup lang="ts">
+import type { CSSProperties } from "vue"
+
+import { Button } from "@/components/ui/button"
+import {
+  Field,
+  FieldDescription,
+  FieldLabel,
+} from "@/components/ui/field"
+import { Input } from "@/components/ui/input"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { Switch } from "@/components/ui/switch"
+import SettingsPageHeader from "@/components/settings/SettingsPageHeader.vue"
+import SettingsSection from "@/components/settings/SettingsSection.vue"
+import { cn } from "@/lib/utils"
+import type {
+  BooleanSettingsKey,
+  SettingsActionKey,
+  SettingsCategory,
+  SettingsInputItem,
+  SettingsSelectItem,
+  SettingsSelectOption,
+  SettingsState,
+  StringSettingsKey,
+  SettingsToggleItem,
+} from "@/components/settings/types"
+
+const props = defineProps<{
+  category: SettingsCategory
+  state: SettingsState
+}>()
+
+const emit = defineEmits<{
+  action: [actionKey: SettingsActionKey]
+}>()
+
+function updateBoolean(key: BooleanSettingsKey, value: boolean) {
+  props.state[key] = value
+}
+
+function updateString<K extends StringSettingsKey>(key: K, value: SettingsState[K]) {
+  props.state[key] = value
+}
+
+function updateToggleItem(item: SettingsToggleItem, value: boolean) {
+  updateBoolean(item.modelKey, value)
+}
+
+function updateTextItem(item: SettingsInputItem | SettingsSelectItem, value: string) {
+  updateString(item.modelKey, value as SettingsState[typeof item.modelKey])
+}
+
+function getStringValue(key: keyof SettingsState) {
+  const value = props.state[key]
+  return typeof value === "string" ? value : ""
+}
+
+function getBooleanValue(key: keyof SettingsState) {
+  return Boolean(props.state[key])
+}
+
+function getSelectedOption(item: SettingsSelectItem) {
+  const value = getStringValue(item.modelKey)
+  return item.options.find(option => option.value === value)
+}
+
+function getSelectedOptionLabel(item: SettingsSelectItem) {
+  return getSelectedOption(item)?.label ?? getStringValue(item.modelKey)
+}
+
+function getColorSwatchStyle(option: SettingsSelectOption): CSSProperties | undefined {
+  if (!option.color) {
+    return undefined
+  }
+
+  return {
+    "--settings-color-swatch": option.color,
+    "--settings-color-swatch-dark": option.darkColor ?? option.color,
+  } as CSSProperties
+}
+
+function getSelectedColorSwatchStyle(item: SettingsSelectItem) {
+  const option = getSelectedOption(item)
+  return option ? getColorSwatchStyle(option) : undefined
+}
+
+function isItemDisabled(key: string) {
+  return key === "timezone" && props.state.autoTimezoneByLocation
+}
+</script>
+
+<template>
+  <div class="flex min-h-0 flex-1 flex-col">
+    <SettingsPageHeader
+      :title="props.category.pageTitle ?? props.category.label"
+      :description="props.category.pageDescription ?? props.category.description"
+    />
+
+    <div class="min-h-0 flex-1 overflow-y-auto px-3 pb-4 sm:px-4">
+      <div class="mx-auto w-full max-w-4xl space-y-8">
+        <SettingsSection
+          v-for="section in props.category.sections"
+          :key="section.key"
+          :title="section.title"
+          :description="section.description"
+          :tone="section.tone"
+          :show-header="true"
+        >
+          <div class="space-y-5">
+            <template
+              v-for="item in section.items"
+              :key="item.key"
+            >
+              <div class="flex min-w-0 flex-row items-start gap-4 py-1 sm:gap-6 lg:gap-8">
+                <Field class="min-w-0 flex-1 gap-1.5">
+                  <FieldLabel :class="cn('text-sm', section.tone === 'danger' ? 'text-destructive' : undefined)">
+                    {{ item.label }}
+                  </FieldLabel>
+                  <FieldDescription class="text-sm leading-5">
+                    {{ item.description }}
+                  </FieldDescription>
+                </Field>
+
+                <div class="flex w-[196px] shrink-0 items-center justify-end xl:w-[220px]">
+                  <Switch
+                    v-if="item.type === 'toggle'"
+                    :checked="getBooleanValue(item.modelKey)"
+                    :disabled="isItemDisabled(item.key)"
+                    @update:checked="updateToggleItem(item, Boolean($event))"
+                  />
+
+                  <Input
+                    v-else-if="item.type === 'input'"
+                    :model-value="getStringValue(item.modelKey)"
+                    :placeholder="item.placeholder"
+                    :disabled="isItemDisabled(item.key)"
+                    class="h-9 w-full min-w-0 rounded-md bg-background"
+                    @update:model-value="updateTextItem(item, String($event))"
+                  />
+
+                  <Select
+                    v-else-if="item.type === 'select'"
+                    :model-value="getStringValue(item.modelKey)"
+                    @update:model-value="updateTextItem(item, String($event))"
+                  >
+                    <SelectTrigger
+                      :disabled="isItemDisabled(item.key)"
+                      class="h-9 w-full min-w-0 rounded-md bg-background text-sm"
+                    >
+                      <SelectValue
+                        v-if="getSelectedOption(item)?.color"
+                        :placeholder="item.label"
+                      >
+                        <span class="inline-flex min-w-0 items-center gap-2">
+                          <span
+                            class="size-3 shrink-0 rounded-sm border border-border/70 bg-[var(--settings-color-swatch)] shadow-xs dark:bg-[var(--settings-color-swatch-dark)]"
+                            :style="getSelectedColorSwatchStyle(item)"
+                            aria-hidden="true"
+                          />
+                          <span class="truncate">{{ getSelectedOptionLabel(item) }}</span>
+                        </span>
+                      </SelectValue>
+                      <SelectValue
+                        v-else
+                        :placeholder="item.label"
+                      />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem
+                        v-for="option in item.options"
+                        :key="option.value"
+                        :value="option.value"
+                      >
+                        <span
+                          v-if="option.color"
+                          class="size-3 shrink-0 rounded-sm border border-border/70 bg-[var(--settings-color-swatch)] shadow-xs dark:bg-[var(--settings-color-swatch-dark)]"
+                          :style="getColorSwatchStyle(option)"
+                          aria-hidden="true"
+                        />
+                        <span>{{ option.label }}</span>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+
+                  <Button
+                    v-else
+                    :variant="item.variant === 'destructive' ? 'outline' : (item.variant ?? 'default')"
+                    :class="cn(
+                      'h-8 shrink-0 rounded-md px-3.5',
+                      item.variant === 'destructive'
+                        && 'border-destructive/30 bg-background font-medium text-destructive shadow-none hover:bg-destructive/5 hover:text-destructive',
+                    )"
+                    @click="emit('action', item.actionKey)"
+                  >
+                    {{ item.buttonLabel }}
+                  </Button>
+                </div>
+              </div>
+            </template>
+          </div>
+        </SettingsSection>
+      </div>
+    </div>
+  </div>
+</template>

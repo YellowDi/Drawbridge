@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <script>
+      (function() {
+        var stored = localStorage.getItem("app-theme");
+        if (!stored || stored === "system") {
+          var legacy = localStorage.getItem("app-dark-mode");
+          if (legacy === "true") stored = "dark";
+          else if (legacy === "false") stored = "light";
+          else stored = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+        }
+        var isDark = stored === "dark";
+        if (isDark) document.documentElement.classList.add("dark");
+        else document.documentElement.classList.remove("dark");
+
+        var themeColorMeta = document.querySelector('meta[name="theme-color"]');
+        if (!themeColorMeta) {
+          themeColorMeta = document.createElement("meta");
+          themeColorMeta.setAttribute("name", "theme-color");
+          document.head.appendChild(themeColorMeta);
+        }
+        themeColorMeta.setAttribute("content", isDark ? "#191919" : "#ffffff");
+      })();
+    </script>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0"
+    />
+    <meta name="theme-color" content="#ffffff" />
+    <title>Drawbridge Admin</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+      }
+
+      #app-bootstrap-loader {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #fafaf9;
+        transition: opacity 180ms ease, visibility 180ms ease;
+      }
+
+      html.dark #app-bootstrap-loader {
+        background: #09090b;
+      }
+
+      .app-bootstrap-spinner {
+        width: 30px;
+        height: 30px;
+        color: #18181b;
+        animation: app-bootstrap-spin 0.72s linear infinite;
+      }
+
+      html.dark .app-bootstrap-spinner {
+        color: #f4f4f5;
+      }
+
+      body.app-ready #app-bootstrap-loader {
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+      }
+
+      @keyframes app-bootstrap-spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+    </style>
+  </head>
+  <body class="bg-background text-foreground">
+    <div id="app-bootstrap-loader" aria-hidden="true">
+      <svg
+        class="app-bootstrap-spinner"
+        viewBox="0 0 24 24"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <circle
+          cx="12"
+          cy="12"
+          r="8"
+          stroke="currentColor"
+          stroke-opacity="0.18"
+          stroke-width="2.25"
+        />
+        <circle
+          cx="12"
+          cy="12"
+          r="8"
+          stroke="currentColor"
+          stroke-width="2.25"
+          stroke-linecap="round"
+          stroke-dasharray="26 50.3"
+        />
+      </svg>
+    </div>
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

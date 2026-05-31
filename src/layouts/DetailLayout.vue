@@ -1,0 +1,401 @@
+<script setup lang="ts">
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, useSlots, watch } from "vue"
+
+import SectionHeader from "@/components/layout/SectionHeader.vue"
+import { useSlidingTabIndicator } from "@/composables/useSlidingTabIndicator"
+import { Button } from "@/components/ui/button"
+import { Separator } from "@/components/ui/separator"
+
+// 详情页页面骨架。
+// 新建详情页时优先复用这里：只关心标题、空态，以及 primary/secondary 两个内容槽。
+// 单列详情页只传 primary；双列详情页同时传 primary 和 secondary。
+type DetailLayoutTab = {
+  id: string
+  label: string
+  active?: boolean
+  disabled?: boolean
+}
+
+const props = withDefaults(defineProps<{
+  title: string
+  subtitle?: string
+  empty?: boolean
+  emptyText?: string
+  backLabel?: string
+  secondaryVisible?: boolean
+  fullWidth?: boolean
+  tabs?: DetailLayoutTab[]
+  tabsAriaLabel?: string
+}>(), {
+  subtitle: "",
+  empty: false,
+  emptyText: "未找到相关信息",
+  backLabel: "返回列表",
+  secondaryVisible: true,
+  fullWidth: false,
+  tabs: () => [],
+  tabsAriaLabel: "详情页面切换",
+})
+
+const emit = defineEmits<{
+  back: []
+  tabClick: [id: string]
+}>()
+
+const slots = useSlots()
+const headerRef = ref<HTMLElement | null>(null)
+const headerHeight = ref(0)
+const hasTabs = computed(() => props.tabs.length > 0)
+const hasSecondary = computed(() => Boolean(slots.secondary) && props.secondaryVisible)
+const useSingleColumn = computed(() => props.fullWidth || !hasSecondary.value)
+const hasHeaderActionSlot = computed(() => Boolean(slots.headerActions) || (!hasTabs.value && Boolean(slots.actions)))
+const hasTabActions = computed(() => hasTabs.value && (Boolean(slots.tabActions) || Boolean(slots.actions)))
+const hasHeaderBottom = computed(() => Boolean(slots.headerBottom))
+const activeTabId = computed(() => props.tabs.find(tab => tab.active)?.id ?? props.tabs[0]?.id ?? "")
+const mobileTabsScrollViewportRef = ref<HTMLElement | null>(null)
+const mobileTabsOverflowLeft = ref(false)
+const mobileTabsOverflowRight = ref(false)
+let mobileTabsResizeObserver: ResizeObserver | null = null
+const tabsScrollViewportRef = ref<HTMLElement | null>(null)
+const tabsOverflowLeft = ref(false)
+const tabsOverflowRight = ref(false)
+let tabsResizeObserver: ResizeObserver | null = null
+const { indicatorStyle, setTabRef } = useSlidingTabIndicator({
+  activeKey: activeTabId,
+  watchSource: computed(() => props.tabs.map(tab => `${tab.id}:${tab.label}:${Number(Boolean(tab.active))}:${Number(Boolean(tab.disabled))}`)),
+})
+const { indicatorStyle: mobileIndicatorStyle, setTabRef: setMobileTabRef } = useSlidingTabIndicator({
+  activeKey: activeTabId,
+  watchSource: computed(() => props.tabs.map(tab => `${tab.id}:${tab.label}:${Number(Boolean(tab.active))}:${Number(Boolean(tab.disabled))}`)),
+})
+
+let headerResizeObserver: ResizeObserver | null = null
+
+function syncHeaderHeight() {
+  headerHeight.value = headerRef.value?.offsetHeight ?? 0
+}
+
+function syncMobileTabsOverflowState() {
+  const element = mobileTabsScrollViewportRef.value
+  if (!element) {
+    mobileTabsOverflowLeft.value = false
+    mobileTabsOverflowRight.value = false
+    return
+  }
+
+  const maxScrollLeft = Math.max(0, element.scrollWidth - element.clientWidth)
+  mobileTabsOverflowLeft.value = element.scrollLeft > 2
+  mobileTabsOverflowRight.value = maxScrollLeft - element.scrollLeft > 2
+}
+
+function handleMobileTabsScroll() {
+  syncMobileTabsOverflowState()
+}
+
+function syncTabsOverflowState() {
+  const element = tabsScrollViewportRef.value
+  if (!element) {
+    tabsOverflowLeft.value = false
+    tabsOverflowRight.value = false
+    return
+  }
+
+  const maxScrollLeft = Math.max(0, element.scrollWidth - element.clientWidth)
+  tabsOverflowLeft.value = element.scrollLeft > 2
+  tabsOverflowRight.value = maxScrollLeft - element.scrollLeft > 2
+}
+
+function handleTabsScroll() {
+  syncTabsOverflowState()
+}
+
+onMounted(() => {
+  syncHeaderHeight()
+
+  if (typeof ResizeObserver !== "undefined" && headerRef.value) {
+    headerResizeObserver = new ResizeObserver(() => {
+      syncHeaderHeight()
+    })
+    headerResizeObserver.observe(headerRef.value)
+  }
+
+  nextTick(() => {
+    syncMobileTabsOverflowState()
+    syncTabsOverflowState()
+
+    if (typeof ResizeObserver !== "undefined" && mobileTabsScrollViewportRef.value) {
+      mobileTabsResizeObserver = new ResizeObserver(() => {
+        syncMobileTabsOverflowState()
+      })
+      mobileTabsResizeObserver.observe(mobileTabsScrollViewportRef.value)
+    }
+
+    if (typeof ResizeObserver !== "undefined" && tabsScrollViewportRef.value) {
+      tabsResizeObserver = new ResizeObserver(() => {
+        syncTabsOverflowState()
+      })
+      tabsResizeObserver.observe(tabsScrollViewportRef.value)
+    }
+  })
+
+  window.addEventListener("resize", syncMobileTabsOverflowState)
+  window.addEventListener("resize", syncTabsOverflowState)
+})
+
+onBeforeUnmount(() => {
+  headerResizeObserver?.disconnect()
+  headerResizeObserver = null
+  mobileTabsResizeObserver?.disconnect()
+  mobileTabsResizeObserver = null
+  tabsResizeObserver?.disconnect()
+  tabsResizeObserver = null
+  window.removeEventListener("resize", syncMobileTabsOverflowState)
+  window.removeEventListener("resize", syncTabsOverflowState)
+})
+
+watch(
+  () => [
+    props.tabs.length,
+    activeTabId.value,
+    hasTabActions.value,
+  ],
+  () => {
+    nextTick(() => {
+      syncMobileTabsOverflowState()
+      syncTabsOverflowState()
+    })
+  },
+)
+
+</script>
+
+<template>
+  <section
+    :class="[
+      'detail-layout mx-auto flex w-full min-w-0 flex-1 flex-col px-0 sm:px-4 xl:px-8',
+      useSingleColumn ? 'detail-layout--single-column' : '',
+      props.fullWidth ? 'max-w-none' : 'max-w-[1440px]',
+    ]"
+    :style="{ '--detail-layout-sticky-offset': `${headerHeight}px` }"
+  >
+    <template v-if="!props.empty">
+      <div
+        ref="headerRef"
+        class="sticky top-0 z-20 mx-0 bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/80 sm:-mx-4"
+      >
+        <div data-detail-layout-header-content :class="['px-1 pt-4 sm:px-4 sm:pt-5', hasTabs || hasHeaderBottom ? '' : 'pb-4 sm:pb-5']">
+          <div
+            v-if="!hasTabs"
+            class="flex min-w-0 items-center justify-between gap-3"
+          >
+            <SectionHeader
+              :title="props.title"
+              :subtitle="props.subtitle"
+              :has-actions="false"
+              layout-class="min-w-0 flex-1"
+            >
+              <template #leading>
+                <button
+                  type="button"
+                  class="inline-flex size-8 items-center justify-center rounded-md text-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+                  :aria-label="props.backLabel"
+                  @click="emit('back')"
+                >
+                  <i class="ri-arrow-left-line text-[18px]" />
+                </button>
+              </template>
+            </SectionHeader>
+
+            <div
+              v-if="hasHeaderActionSlot"
+              class="flex min-w-0 max-w-[55vw] shrink-0 justify-end sm:max-w-full"
+            >
+              <div class="-mx-1 -my-1 flex min-w-0 items-center gap-1 overflow-x-auto px-1 py-1 whitespace-nowrap sm:mx-0 sm:my-0 sm:overflow-visible sm:px-0 sm:py-1">
+                <slot v-if="$slots.headerActions" name="headerActions" />
+                <slot v-else name="actions" />
+              </div>
+            </div>
+          </div>
+
+          <SectionHeader
+            v-else
+            :title="props.title"
+            :subtitle="props.subtitle"
+            :has-actions="false"
+          >
+            <template #leading>
+              <button
+                type="button"
+                class="inline-flex size-8 items-center justify-center rounded-md text-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+                :aria-label="props.backLabel"
+                @click="emit('back')"
+              >
+                <i class="ri-arrow-left-line text-[18px]" />
+              </button>
+            </template>
+          </SectionHeader>
+
+          <div v-if="hasTabs" class="mt-4 border-b border-border text-muted-foreground">
+            <div class="flex min-w-0 items-end justify-between gap-2 sm:hidden">
+              <div class="relative min-w-0 flex-1 overflow-visible">
+                <div
+                  ref="mobileTabsScrollViewportRef"
+                  data-detail-layout-tabs-scroll
+                  class="min-w-0 -mt-1 overflow-x-auto whitespace-nowrap pt-1"
+                  @scroll="handleMobileTabsScroll"
+                >
+                  <nav class="relative flex min-w-max flex-nowrap items-center text-[14px]" :aria-label="props.tabsAriaLabel">
+                    <button
+                      v-for="tab in props.tabs"
+                      :key="tab.id"
+                      :ref="(element) => setMobileTabRef(tab.id, element)"
+                      type="button"
+                      :aria-pressed="Boolean(tab.active)"
+                      :disabled="tab.disabled"
+                      :class="[
+                        'group relative shrink-0 px-3 pb-[11px] text-muted-foreground transition-colors hover:text-foreground disabled:pointer-events-none disabled:opacity-40',
+                        tab.active ? 'font-semibold text-foreground' : '',
+                      ]"
+                      @click="emit('tabClick', tab.id)"
+                    >
+                      <span class="relative isolate inline-block">
+                        <span class="pointer-events-none absolute -inset-x-2 -inset-y-1 rounded-md transition-colors group-hover:bg-surface-tertiary" />
+                        <span class="relative z-10">{{ tab.label }}</span>
+                      </span>
+                    </button>
+                    <span
+                      aria-hidden="true"
+                      class="pointer-events-none absolute bottom-0 left-0 h-0.5 rounded-full bg-foreground transition-[transform,width,opacity] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
+                      :style="mobileIndicatorStyle"
+                    />
+                  </nav>
+                </div>
+
+                <div
+                  v-if="mobileTabsOverflowLeft"
+                  class="pointer-events-none absolute inset-y-0 left-0 z-10 w-8 bg-gradient-to-r from-background via-background/88 to-transparent"
+                />
+                <div
+                  v-if="mobileTabsOverflowRight"
+                  class="pointer-events-none absolute inset-y-0 right-0 z-10 w-10 bg-gradient-to-l from-background via-background/92 to-transparent"
+                />
+              </div>
+
+              <div v-if="hasTabActions" class="ml-auto shrink-0 pb-2">
+                <slot v-if="$slots.tabActions" name="tabActions" />
+                <slot v-else name="actions" />
+              </div>
+            </div>
+
+            <div class="hidden min-w-0 items-end gap-6 sm:flex sm:flex-nowrap">
+              <div class="relative min-w-0 flex-1 overflow-visible">
+                <div
+                  ref="tabsScrollViewportRef"
+                  data-detail-layout-tabs-scroll
+                  class="min-w-0 -mt-1 overflow-x-auto whitespace-nowrap pt-1"
+                  @scroll="handleTabsScroll"
+                >
+                  <nav class="relative flex min-w-max flex-nowrap items-center text-[14px]" :aria-label="props.tabsAriaLabel">
+                    <button
+                      v-for="tab in props.tabs"
+                      :key="tab.id"
+                      :ref="(element) => setTabRef(tab.id, element)"
+                      type="button"
+                      :aria-pressed="Boolean(tab.active)"
+                      :disabled="tab.disabled"
+                      :class="[
+                        'group relative shrink-0 px-3 pb-[11px] text-muted-foreground transition-colors hover:text-foreground disabled:pointer-events-none disabled:opacity-40',
+                        tab.active ? 'font-semibold text-foreground' : '',
+                      ]"
+                      @click="emit('tabClick', tab.id)"
+                    >
+                      <span class="relative isolate inline-block">
+                        <span class="pointer-events-none absolute -inset-x-2 -inset-y-1 rounded-md transition-colors group-hover:bg-surface-tertiary" />
+                        <span class="relative z-10">{{ tab.label }}</span>
+                      </span>
+                    </button>
+                    <span
+                      aria-hidden="true"
+                      class="pointer-events-none absolute bottom-0 left-0 h-0.5 rounded-full bg-foreground transition-[transform,width,opacity] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
+                      :style="indicatorStyle"
+                    />
+                  </nav>
+                </div>
+
+                <div
+                  v-if="tabsOverflowLeft"
+                  class="pointer-events-none absolute inset-y-0 left-0 z-10 w-8 bg-gradient-to-r from-background via-background/88 to-transparent"
+                />
+                <div
+                  v-if="tabsOverflowRight"
+                  class="pointer-events-none absolute inset-y-0 right-0 z-10 w-10 bg-gradient-to-l from-background via-background/92 to-transparent"
+                />
+              </div>
+
+              <div
+                v-if="hasTabActions"
+                class="flex shrink-0 items-center justify-end pb-2"
+              >
+                <slot v-if="$slots.tabActions" name="tabActions" />
+                <slot v-else name="actions" />
+              </div>
+            </div>
+          </div>
+
+          <div v-if="hasHeaderBottom" class="mt-4">
+            <slot name="headerBottom" />
+          </div>
+        </div>
+      </div>
+
+      <div class="detail-layout__content grid min-h-0 min-w-0 flex-1 grid-cols-1 gap-0 px-0">
+        <div class="detail-layout__primary flex min-h-0 min-w-0 flex-col pr-0">
+          <slot name="primary" />
+        </div>
+
+        <Separator
+          v-if="hasSecondary"
+          orientation="vertical"
+          class="detail-layout__divider hidden h-auto bg-border/80"
+        />
+
+        <Separator
+          v-if="hasSecondary"
+          orientation="horizontal"
+          class="detail-layout__stack-divider bg-border/80"
+        />
+
+        <div v-if="hasSecondary" class="detail-layout__secondary flex min-h-0 min-w-0 flex-col">
+          <slot name="secondary" />
+        </div>
+      </div>
+    </template>
+
+    <template v-else>
+      <div :class="['mx-auto w-full min-w-0', props.fullWidth ? 'max-w-none' : 'max-w-[1440px]']">
+        <div class="flex flex-1 items-center justify-center py-16 text-muted-foreground">
+          <slot name="empty">
+            <p>{{ props.emptyText }}</p>
+            <Button variant="link" class="ml-2 gap-1" @click="emit('back')">
+              <i class="ri-arrow-left-line text-base" />
+              {{ props.backLabel }}
+            </Button>
+          </slot>
+        </div>
+      </div>
+    </template>
+  </section>
+</template>
+
+<style>
+[data-detail-layout-tabs-scroll] {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+[data-detail-layout-tabs-scroll]::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+</style>

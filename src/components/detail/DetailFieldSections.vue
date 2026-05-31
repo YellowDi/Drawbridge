@@ -1,0 +1,255 @@
+<script setup lang="ts">
+import { computed } from "vue"
+
+import TitleBlock from "@/components/layout/TitleBlock.vue"
+import MediaLightbox from "@/components/media/MediaLightbox.vue"
+import TableStatusChip from "@/components/table-page/TableStatusChip.vue"
+import { Button } from "@/components/ui/button"
+import { Separator } from "@/components/ui/separator"
+import type { DetailContactValue, DetailFieldMediaFile, DetailFieldRow, DetailFieldSection, DetailFieldValue, DetailStatusValue } from "@/components/detail/types"
+import { remixIconForDetailFieldAction } from "@/lib/actionIcons"
+import { cn } from "@/lib/utils"
+
+// 左侧“普通字段详情”模块。
+// 新页面只需要准备 sections schema，不再手写标题、字段行和分隔线结构。
+const props = withDefaults(defineProps<{
+  sections: DetailFieldSection[]
+  labelWidthMobile?: string
+  labelWidthDesktop?: string
+  compact?: boolean
+  showSectionTitles?: boolean
+  useTitleBlock?: boolean
+}>(), {
+  labelWidthMobile: "6.5rem",
+  labelWidthDesktop: "180px",
+  compact: false,
+  showSectionTitles: true,
+  useTitleBlock: false,
+})
+
+const sectionStyle = computed(() => ({
+  "--detail-field-label-mobile": props.labelWidthMobile,
+  "--detail-field-label-desktop": props.labelWidthDesktop,
+}))
+
+function isEmptyLikeValue(value: DetailFieldValue) {
+  if (value === null || value === undefined) return true
+  if (typeof value !== "string") return false
+
+  const normalized = value.trim()
+  return normalized === "" || normalized === "-" || normalized === "—" || normalized === "未填写"
+}
+
+function displayValue(value: DetailFieldValue) {
+  if (isEmptyLikeValue(value)) return "无数据"
+  return `${value}`
+}
+
+function isContactValue(value: DetailFieldValue): value is DetailContactValue {
+  return Boolean(value && typeof value === "object" && "kind" in value && value.kind === "contact")
+}
+
+function isStatusValue(value: DetailFieldValue): value is DetailStatusValue {
+  return Boolean(value && typeof value === "object" && "kind" in value && value.kind === "status")
+}
+
+function shouldTruncateValueContainer(row: DetailFieldRow) {
+  if (row.truncate === false) return false
+  if (row.action || row.suffixAction || row.linkAction || row.imageUrl || row.mediaFiles?.length) return false
+  if (isContactValue(row.value) || isStatusValue(row.value)) return false
+  return true
+}
+
+function isVideoMedia(file: DetailFieldMediaFile) {
+  return file.type === "video" || /\.(mp4|mov|m4v|webm|ogg)(\?|#|$)/i.test(file.src)
+}
+
+function buildImageMediaItem(row: DetailFieldRow): DetailFieldMediaFile {
+  return {
+    key: `${row.key}-image`,
+    src: row.imageUrl ?? "",
+    type: "image",
+    alt: row.label,
+  }
+}
+</script>
+
+<template>
+  <div class="detail-field-sections" :style="sectionStyle">
+    <template v-for="(section, sectionIndex) in sections" :key="section.key">
+      <section :class="cn('detail-field-section', !props.compact && sectionIndex > 0 && 'detail-field-section--after-separator', props.compact && 'pb-0! pt-0!')">
+        <TitleBlock
+          v-if="props.showSectionTitles && section.title && props.useTitleBlock"
+          variant="section"
+          :title="section.title"
+          :sticky="true"
+          sticky-top="var(--detail-layout-sticky-offset, 0px)"
+          class="detail-section-inset pt-4 pb-1"
+        />
+        <div v-else-if="props.showSectionTitles && section.title" class="detail-section-heading-row detail-section-inset">
+          <h2 class="detail-field-section__heading">{{ section.title }}</h2>
+        </div>
+        <div>
+          <div
+            v-for="row in section.rows"
+            :key="row.key"
+            :class="cn(
+              'detail-field-row group',
+              (row.imageUrl || row.mediaFiles?.length || (row.truncate === false && !row.action)) && 'detail-field-row--top-aligned',
+            )"
+          >
+            <div class="detail-field-row__label">{{ row.label }}</div>
+            <div :class="cn('detail-field-row__value', shouldTruncateValueContainer(row) && 'truncate', !row.action && !row.suffixAction && !row.linkAction && isEmptyLikeValue(row.value) && 'detail-field-row__value--empty', row.valueClass)">
+              <template v-if="isContactValue(row.value) && row.suffixAction">
+                <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
+                  <div class="min-w-0 flex-1">
+                    <span :class="cn(isEmptyLikeValue(row.value.name) && 'detail-field-row__value--empty')">{{ displayValue(row.value.name) }}</span>
+                    <span v-if="row.value.phone && !isEmptyLikeValue(row.value.phone)" class="ml-2 text-muted-foreground">{{ row.value.phone }}</span>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    type="button"
+                    class="h-7 shrink-0 self-start rounded-md px-2.5 text-xs leading-5"
+                    @click="row.suffixAction.onClick"
+                  >
+                    <i :class="remixIconForDetailFieldAction(row.suffixAction.label, row.suffixAction.icon)" />
+                    {{ row.suffixAction.label }}
+                  </Button>
+                </div>
+              </template>
+              <template v-else-if="isContactValue(row.value)">
+                <span :class="cn(isEmptyLikeValue(row.value.name) && 'detail-field-row__value--empty')">{{ displayValue(row.value.name) }}</span>
+                <span v-if="row.value.phone && !isEmptyLikeValue(row.value.phone)" class="ml-2 text-muted-foreground">{{ row.value.phone }}</span>
+              </template>
+              <template v-else-if="isStatusValue(row.value) && row.suffixAction">
+                <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
+                  <div class="min-w-0 flex-1">
+                    <TableStatusChip :value="row.value.value" :renderer="row.value.renderer" />
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    type="button"
+                    class="h-7 shrink-0 self-start rounded-md px-2.5 text-xs leading-5"
+                    @click="row.suffixAction.onClick"
+                  >
+                    <i :class="remixIconForDetailFieldAction(row.suffixAction.label, row.suffixAction.icon)" />
+                    {{ row.suffixAction.label }}
+                  </Button>
+                </div>
+              </template>
+              <template v-else-if="isStatusValue(row.value)">
+                <TableStatusChip :value="row.value.value" :renderer="row.value.renderer" />
+              </template>
+              <template v-else-if="row.imageUrl">
+                <MediaLightbox v-slot="{ open: openMediaLightbox }">
+                  <button
+                    type="button"
+                    class="detail-field-row__image-frame detail-field-row__image-frame--interactive"
+                    :aria-label="`预览图片：${row.label}`"
+                    @click="openMediaLightbox(buildImageMediaItem(row), row.label, $event)"
+                  >
+                    <img
+                      :src="row.imageUrl"
+                      :alt="row.label"
+                      class="detail-field-row__image object-contain"
+                    >
+                  </button>
+                </MediaLightbox>
+              </template>
+              <template v-else-if="row.mediaFiles?.length">
+                <MediaLightbox v-slot="{ open: openMediaLightbox }">
+                  <div class="grid max-w-[360px] grid-cols-[repeat(auto-fill,minmax(72px,1fr))] gap-2">
+                    <button
+                      v-for="(file, index) in row.mediaFiles"
+                      :key="file.key"
+                      type="button"
+                      class="group relative aspect-[4/3] min-h-10 overflow-hidden rounded-[4px] bg-muted text-left outline outline-1 -outline-offset-1 outline-black/10 transition-transform duration-180 ease-out hover:scale-[1.01] active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#097fe8]/50"
+                      :aria-label="`预览${isVideoMedia(file) ? '视频' : '图片'}：${file.alt ?? `${row.label} ${index + 1}`}`"
+                      @click="openMediaLightbox(file, row.label, $event)"
+                    >
+                      <video
+                        v-if="isVideoMedia(file)"
+                        :src="file.src"
+                        preload="metadata"
+                        playsinline
+                        muted
+                        class="h-full w-full bg-black object-cover"
+                      />
+                      <img
+                        v-else
+                        :src="file.src"
+                        :alt="file.alt ?? `${row.label} ${index + 1}`"
+                        class="h-full w-full object-cover"
+                      >
+                      <span
+                        v-if="isVideoMedia(file)"
+                        class="pointer-events-none absolute left-1/2 top-1/2 flex size-8 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-black/45 text-white shadow-[0_8px_18px_rgba(0,0,0,0.18)] backdrop-blur-sm transition-transform duration-200 ease-out group-hover:scale-105"
+                      >
+                        <i class="ri-play-fill translate-x-px text-[18px]" />
+                      </span>
+                    </button>
+                  </div>
+                </MediaLightbox>
+              </template>
+              <template v-else-if="row.linkAction">
+                <button
+                  type="button"
+                  class="inline-flex max-w-full min-w-0 items-center gap-1 text-left text-link transition-colors hover:text-link-hover"
+                  @click="row.linkAction.onClick"
+                >
+                  <span class="truncate">{{ displayValue(row.value) }}</span>
+                  <i class="ri-arrow-right-up-line shrink-0 text-sm" />
+                </button>
+              </template>
+              <template v-else-if="row.suffixAction">
+                <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
+                  <div :class="cn('min-w-0 flex-1', row.truncate !== false && 'truncate')">
+                    {{ displayValue(row.value) }}
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    type="button"
+                    class="h-7 shrink-0 self-start rounded-md px-2.5 text-xs leading-5"
+                    @click="row.suffixAction.onClick"
+                  >
+                    <i :class="remixIconForDetailFieldAction(row.suffixAction.label, row.suffixAction.icon)" />
+                    {{ row.suffixAction.label }}
+                  </Button>
+                </div>
+              </template>
+              <template v-else-if="row.action">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  type="button"
+                  class="detail-field-row__action h-7 min-h-0 rounded-md px-2.5 text-xs leading-5"
+                  @click="row.action.onClick"
+                >
+                  <i :class="remixIconForDetailFieldAction(row.action.label, row.action.icon)" />
+                  {{ row.action.label }}
+                </Button>
+              </template>
+              <template v-else>
+                <span :class="cn(row.truncate === false && 'whitespace-pre-wrap break-words')">{{ displayValue(row.value) }}</span>
+                <span
+                  v-if="row.suffixHint"
+                  :class="cn('ml-2 inline-flex items-center gap-1 align-middle text-xs text-muted-foreground', row.suffixHintClass)"
+                >
+                  <span>{{ row.suffixHint }}</span>
+                </span>
+              </template>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <Separator
+        v-if="!props.compact && sectionIndex < sections.length - 1"
+        class="bg-border/80"
+      />
+    </template>
+  </div>
+</template>

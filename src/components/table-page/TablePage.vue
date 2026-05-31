@@ -1,0 +1,155 @@
+<script setup lang="ts">
+import type { PropType } from "vue"
+import { useSlots } from "vue"
+
+import Page from "@/components/table-page/TablePageShell.vue"
+import type { TableExportRowsResolver } from "@/components/table-page/export-utils"
+import type { TablePageController } from "@/components/table-page/useTablePage"
+import type { TableQueryBarConfig } from "@/components/table-page/types"
+
+const props = defineProps({
+  page: {
+    type: Object as PropType<TablePageController<any>>,
+    required: true,
+  },
+  showToolbarActions: {
+    type: Boolean,
+    default: true,
+  },
+  /** 兼容旧调用保留；公共表格已统一结构，不再影响左右布局。 */
+  listLevelTable: {
+    type: Boolean,
+    default: true,
+  },
+  fillAvailableHeight: {
+    type: Boolean,
+    default: false,
+  },
+  loading: {
+    type: Boolean,
+    default: false,
+  },
+  loadingRowCount: {
+    type: Number,
+    default: 8,
+  },
+  pinRowActions: {
+    type: Boolean,
+    default: true,
+  },
+  toolbarSortBehavior: {
+    type: String as PropType<"default" | "toggle">,
+    default: "default",
+  },
+  toolbarSortDirection: {
+    type: String as PropType<"asc" | "desc">,
+    default: "desc",
+  },
+  queryBar: {
+    type: Object as PropType<TableQueryBarConfig | null>,
+    default: null,
+  },
+  exportRowsResolver: {
+    type: Function as PropType<TableExportRowsResolver>,
+    default: undefined,
+  },
+  exportFilteredRowsCount: {
+    type: Number,
+    default: undefined,
+  },
+  exportTotalRowsCount: {
+    type: Number,
+    default: undefined,
+  },
+})
+
+const emit = defineEmits<{
+  "update:selected-row-keys": [keys: Array<string | number>]
+  "refresh-action": []
+  "export-action": []
+  "primary-action": []
+  "toolbar-sort-toggle": []
+  "query-change": [payload: { key: string; value: string | string[] }]
+  "query-clear": []
+}>()
+
+const slots = useSlots()
+</script>
+
+<template>
+  <Page
+    :title="page.title"
+    :description="page.description"
+    :tabs="page.tabs.value"
+    :fields="page.fields.value"
+    :available-filters="page.availableFilterKeys.value"
+    :show-controls="page.showControls.value"
+    :custom-sort-enabled="page.customSortEnabled.value"
+    :sort-rules="page.sortRules.value"
+    :sort-field-options="page.sortFieldOptions.value"
+    :primary-action-label="page.primaryActionLabel"
+    :primary-action-permission-code="page.primaryActionPermissionCode"
+    :text-filters="page.textFilters.value"
+    :number-filters="page.numberFilters.value"
+    :tag-filters="page.tagFilters.value"
+    :tag-filter-options="page.tagFilterOptions.value"
+    :date-filters="page.dateFilters.value"
+    :date-filter-fields="page.dateFilterFields.value"
+    :columns="page.columns"
+    :row-actions="page.rowActions"
+    :on-row-click="page.onRowClick"
+    :on-quick-action="page.onQuickAction"
+    :rows="page.visibleRows.value"
+    :filtered-rows="page.filteredRows.value"
+    :selected-rows="page.selectedRows.value"
+    :row-key="page.rowKey"
+    :selected-row-keys="page.selectedRowKeys.value"
+    :selected-rows-count="page.selectedRowsCount.value"
+    :filtered-rows-count="props.exportFilteredRowsCount ?? page.filteredRowsCount.value"
+    :total-rows-count="props.exportTotalRowsCount ?? page.totalRowsCount.value"
+    :current-filters-summary="page.activeFilterSummary.value"
+    :summary="page.summary"
+    :show-index="page.showIndex"
+    :sticky-header="page.stickyHeader"
+    :wrapper-class="page.wrapperClass"
+    :table-class="page.tableClass"
+    :empty-state="page.emptyState"
+    :show-toolbar-actions="props.showToolbarActions"
+    :list-level-table="props.listLevelTable"
+    :fill-available-height="props.fillAvailableHeight"
+    :loading="props.loading"
+    :loading-row-count="props.loadingRowCount"
+    :pin-row-actions="props.pinRowActions"
+    :toolbar-sort-behavior="props.toolbarSortBehavior"
+    :toolbar-sort-direction="props.toolbarSortDirection"
+    :query-bar="props.queryBar"
+    :export-rows-resolver="props.exportRowsResolver"
+    @tab-click="page.handleTabClick($event)"
+    @add-filter="page.handleAddFilter($event)"
+    @replace-filter="page.handleReplaceFilter"
+    @remove-filter="page.handleRemoveFilter"
+    @clear-all-filters="page.clearAllFilters"
+    @refresh-action="emit('refresh-action')"
+    @set-custom-sort-enabled="page.customSortEnabled.value = $event"
+    @update-sort-rules="page.sortRules.value = $event"
+    @toggle-controls="page.showControls.value = !page.showControls.value"
+    @update-text-filter="page.updateTextFilter($event.label, $event.value)"
+    @update-number-filter="page.updateNumberFilter($event.label, $event.value)"
+    @update-tag-filter="page.updateTagFilter($event.label, $event.value)"
+    @update-date-filter="page.updateDateFilter($event.label, $event.value)"
+    @update:selected-row-keys="page.selectedRowKeys.value = $event; emit('update:selected-row-keys', $event)"
+    @export-action="emit('export-action')"
+    @primary-action="emit('primary-action')"
+    @toolbar-sort-toggle="emit('toolbar-sort-toggle')"
+    @query-change="emit('query-change', $event)"
+    @query-clear="emit('query-clear')"
+  >
+    <template
+      v-for="(_, name) in slots"
+      :key="name"
+      #[name]="slotProps"
+    >
+      <slot :name="name" v-bind="slotProps" />
+    </template>
+  </Page>
+</template>
