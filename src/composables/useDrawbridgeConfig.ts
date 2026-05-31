@@ -8,6 +8,8 @@ const defaultShellConfig = {
     width: "255px",
     navigationLabel: "主导航",
     showLogo: true,
+    showTopTabs: true,
+    showSearch: true,
     showUserCard: true,
   },
   header: {

@@ -14,6 +14,9 @@ type TopBarTab = {
 const props = defineProps<{
   tabs: TopBarTab[]
   modelValue: string
+  showLogo?: boolean
+  showSearch?: boolean
+  showTabs?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -25,7 +28,7 @@ const { brand } = useDrawbridgeConfig()
 </script>
 
 <template>
-  <div class="p-2">
+  <div v-if="props.showLogo !== false" class="p-2">
     <RouterLink
       to="/"
       class="inline-flex min-w-0 items-center rounded-md px-2 py-1.5 text-sidebar-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
@@ -39,9 +42,13 @@ const { brand } = useDrawbridgeConfig()
     </RouterLink>
   </div>
 
-  <div class="py-2 pr-2 pl-[13px]">
+  <div
+    v-if="props.showTabs !== false || props.showSearch !== false"
+    class="py-2 pr-2 pl-[13px]"
+  >
     <div class="flex items-center gap-1">
       <TopTabSwitch
+        v-if="props.showTabs !== false"
         :tabs="props.tabs"
         :model-value="props.modelValue"
         fill-active-icon
@@ -51,6 +58,7 @@ const { brand } = useDrawbridgeConfig()
 
       <TooltipWrap content="全局搜索">
         <button
+          v-if="props.showSearch !== false"
           type="button"
           class="top-tab-switch-icon-button ml-auto flex size-10 items-center justify-center rounded-full text-sidebar-foreground/52 transition-transform active:scale-[0.96] hover:text-sidebar-accent-foreground"
           aria-label="打开全局搜索"

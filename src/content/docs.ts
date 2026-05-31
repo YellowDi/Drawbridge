@@ -51,14 +51,16 @@ export const docsSections: DocsSection[] = [
     title: "应用壳配置",
     summary: "AppShell、Header 和 Sidebar 只消费 DrawbridgeConfig，不直接耦合业务系统。项目级差异通过 shell、brand、navItems、quickActions 和 user 注入。",
     points: [
-      "`shell.sidebar` 控制侧栏宽度、导航 aria label、Logo 和用户卡片展示。",
+      "`shell.sidebar` 控制侧栏宽度、导航 aria label、Logo、顶部 tabs、搜索入口和用户卡片展示。",
       "侧栏顶部胶囊切换保留原项目交互：工作台、对话、日历、收件箱使用同一 AppShell 边界和本地 mock 数据。",
+      "全局命令面板复用原项目 CommandDialog 体验，数据来自 `navItems`、`quickActions`、设置分类和侧栏 tabs，支持 `Cmd/Ctrl+K`。",
+      "侧栏底部用户卡片复用原项目 dropdown 结构，用户信息来自 `user` adapter，主题切换复用 `useAppTheme`。",
       "进入 `/settings/:category?` 时侧栏切换为设置目录；离开设置页后恢复主导航内容。",
       "`shell.header` 控制面包屑、描述、快捷入口和主题切换；默认关闭附加操作以贴近 buildguard-admin 顶栏。",
       "`shell.content.padding` 控制主内容密度。",
       "Header 的标题和描述来自 route meta；Sidebar 的高亮路径来自 `meta.navActivePath`。",
     ],
-    code: "export const drawbridgeConfig = {\n  brand: { name: 'Drawbridge', shortName: 'DB', accentColor: '#0075de' },\n  shell: {\n    sidebar: { width: '255px', showUserCard: true },\n    header: { showBreadcrumb: true, showDescription: false, showQuickActions: false },\n    content: { padding: 'comfortable' },\n  },\n}",
+    code: "export const drawbridgeConfig = {\n  brand: { name: 'Drawbridge', shortName: 'DB', accentColor: '#0075de' },\n  shell: {\n    sidebar: { width: '255px', showLogo: true, showTopTabs: true, showSearch: true, showUserCard: true },\n    header: { showBreadcrumb: true, showDescription: false, showQuickActions: false },\n    content: { padding: 'comfortable' },\n  },\n}",
   },
   {
     id: "menu-routes",

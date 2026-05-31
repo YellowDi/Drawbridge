@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, ref, watch } from "vue"
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { useRoute, useRouter } from "vue-router"
-import { toast } from "vue-sonner"
 
 import AppSidebarHomeNav from "@/components/layout/app-sidebar/AppSidebarHomeNav.vue"
 import AppSidebarTopBar from "@/components/layout/app-sidebar/AppSidebarTopBar.vue"
+import UserCardPopover from "@/components/layout/UserCardPopover.vue"
 import type {
   AppSidebarConversationItem,
   AppSidebarInboxGroup,
@@ -27,6 +27,7 @@ import { DEFAULT_SETTINGS_CATEGORY_KEY, isSettingsCategoryKey, type SettingsCate
 const AppSidebarCalendarPanel = defineAsyncComponent(() => import("@/components/layout/app-sidebar/AppSidebarCalendarPanel.vue"))
 const AppSidebarConversationPanel = defineAsyncComponent(() => import("@/components/layout/app-sidebar/AppSidebarConversationPanel.vue"))
 const AppSidebarInboxPanel = defineAsyncComponent(() => import("@/components/layout/app-sidebar/AppSidebarInboxPanel.vue"))
+const GlobalCommand = defineAsyncComponent(() => import("@/components/layout/GlobalCommand.vue"))
 
 defineProps<{
   mobileOpen?: boolean
@@ -38,7 +39,7 @@ const emit = defineEmits<{
 
 const route = useRoute()
 const router = useRouter()
-const { navItems, permissions, shell, user } = useDrawbridgeConfig()
+const { navItems, permissions, quickActions, shell } = useDrawbridgeConfig()
 const { categories } = useSettings()
 const openKeys = ref(new Set<string>())
 
@@ -50,6 +51,7 @@ const topTabs: Array<{ id: AppSidebarTopTabId, label: string, icon: string }> = 
 ]
 
 const selectedTopTab = ref<AppSidebarTopTabId>("home")
+const isSearchDialogOpen = ref(false)
 const sidebarModeTransitionName = ref("sidebar-mode-forward")
 const isSettingsRoute = computed(() => route.path.startsWith("/settings"))
 const settingsActiveKey = computed<SettingsCategoryKey>(() => {
@@ -139,6 +141,9 @@ const activePath = computed(() => {
   return typeof metaPath === "string" ? metaPath : route.path
 })
 const visibleItems = computed<AppSidebarNavItem[]>(() => toSidebarItems(navItems.value))
+const visibleQuickActions = computed(() => (
+  quickActions.value.filter(action => permissions.canAccess(action.permission))
+))
 
 function toSidebarItems(items: DrawbridgeNavItem[]): AppSidebarNavItem[] {
   return items
@@ -208,8 +213,34 @@ function handleTopTabUpdate(value: string) {
 }
 
 function handleSearch() {
-  toast.info("全局搜索入口已保留，真实项目可接入 command palette 数据源。")
+  isSearchDialogOpen.value = true
 }
+
+function handleCommandTopTabSelect(tabId: AppSidebarTopTabId) {
+  selectedTopTab.value = tabId
+}
+
+function handleGlobalKeydown(event: KeyboardEvent) {
+  const isCommandShortcut = (event.metaKey || event.ctrlKey)
+    && !event.altKey
+    && !event.shiftKey
+    && event.key.toLowerCase() === "k"
+
+  if (!isCommandShortcut) {
+    return
+  }
+
+  event.preventDefault()
+  isSearchDialogOpen.value = true
+}
+
+onMounted(() => {
+  window.addEventListener("keydown", handleGlobalKeydown)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener("keydown", handleGlobalKeydown)
+})
 
 watch(isSettingsRoute, (nextValue, previousValue) => {
   if (previousValue === undefined || nextValue === previousValue) {
@@ -268,9 +299,12 @@ watch(() => route.fullPath, () => {
       >
         <SidebarHeader class="shrink-0 pb-0">
           <AppSidebarTopBar
-            v-if="shell.sidebar.showLogo"
+            v-if="shell.sidebar.showLogo || shell.sidebar.showTopTabs || shell.sidebar.showSearch"
             :tabs="topTabs"
             :model-value="selectedTopTab"
+            :show-logo="shell.sidebar.showLogo"
+            :show-search="shell.sidebar.showSearch"
+            :show-tabs="shell.sidebar.showTopTabs"
             @update:model-value="handleTopTabUpdate"
             @search="handleSearch"
           />
@@ -298,20 +332,22 @@ watch(() => route.fullPath, () => {
           />
         </SidebarContent>
 
-        <SidebarFooter v-if="shell.sidebar.showUserCard" class="shrink-0 p-2">
-          <div class="flex min-w-0 items-center gap-2 rounded-lg p-2 transition-colors hover:bg-interactive-hover">
-            <span class="inline-flex size-9 shrink-0 items-center justify-center rounded-md bg-card text-xs font-semibold text-card-foreground shadow-sm">
-              {{ user.avatarFallback ?? user.name.slice(0, 2).toUpperCase() }}
-            </span>
-            <span class="min-w-0">
-              <span class="block truncate text-sm font-medium">{{ user.name }}</span>
-              <span class="block truncate text-xs text-muted-foreground">{{ user.role }}</span>
-            </span>
-          </div>
+        <SidebarFooter v-if="shell.sidebar.showUserCard" class="shrink-0">
+          <UserCardPopover />
         </SidebarFooter>
       </div>
     </Transition>
 
     <SidebarRail />
   </Sidebar>
+
+  <GlobalCommand
+    v-if="isSearchDialogOpen"
+    v-model:open="isSearchDialogOpen"
+    :navigation-items="visibleItems"
+    :quick-actions="visibleQuickActions"
+    :settings-categories="visibleSettingsCategories"
+    :top-tabs="topTabs"
+    @select-top-tab="handleCommandTopTabSelect"
+  />
 </template>

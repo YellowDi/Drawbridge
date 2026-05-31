@@ -13,6 +13,7 @@ export type DrawbridgeUser = {
   name: string
   email: string
   role: string
+  avatarUrl?: string
   avatarFallback?: string
 }
 
@@ -42,6 +43,8 @@ export type DrawbridgeShellConfig = {
     width?: string
     navigationLabel?: string
     showLogo?: boolean
+    showTopTabs?: boolean
+    showSearch?: boolean
     showUserCard?: boolean
   }
   header?: {
